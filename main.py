@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 from google import genai
 from google.genai import types
 from PIL import Image
@@ -9,7 +8,36 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Image as RLImage, S
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------- Google Gemini Client ----------
-client = genai.Client(api_key="AIzaSyB9KSN5Tsn-wZua99GtnxnjCstAITw3L-U")  # Replace with your key
+client = genai.Client(api_key="YOUR_API_KEY_HERE")  # Replace with your API key
+
+# ---------- Hardcoded Credentials ----------
+USER_CREDENTIALS = {
+    "admin": "admin123",
+    "ayushi": "mypassword"
+}
+
+# ---------- Initialize Session State ----------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+# ---------- Login Function ----------
+def login():
+    st.title("🔒 AI Storybook Generator Login")
+    username = st.text_input("Username", key="login_username")
+    password = st.text_input("Password", type="password", key="login_password")
+    
+    login_pressed = st.button("Login")
+    
+    if login_pressed:
+        if username in USER_CREDENTIALS and USER_CREDENTIALS[username] == password:
+            st.session_state.logged_in = True
+            st.session_state.username = username
+            st.success(f"Logged in as {username}")
+            st.rerun()
+        else:
+            st.error("❌ Invalid username or password")
 
 # ---------- IMAGE + TEXT GENERATION ----------
 def generate_text_and_image(prompt: str):
@@ -34,12 +62,15 @@ def generate_text_and_image(prompt: str):
     return generated_texts, generated_images
 
 # ---------- STORY GENERATION ----------
-def generate_story(prompt: str, pages: int = 5):
+def generate_story(prompt: str, story_type: str, pages: int = 5):
     story_pages = []
     for i in range(1, pages + 1):
-        page_prompt = f"Page {i} of a children's story: {prompt}"
+        page_prompt = (
+            f"Page {i} of a {story_type.lower()} children's story: {prompt}. "
+            "Write a detailed and engaging story for children, around 150–200 words, "
+            "including dialogues, emotions, and vivid descriptions."
+        )
         texts, images = generate_text_and_image(page_prompt)
-
         page_text = texts[0] if texts else f"Page {i}: (No text generated)"
         page_image = images[0] if images else None
         story_pages.append((page_text, page_image))
@@ -55,7 +86,6 @@ def create_pdf(story_pages, output_file="storybook.pdf"):
         elements.append(Paragraph(f"<b>Page {i}</b>", styles["Heading2"]))
         elements.append(Paragraph(text, styles["Normal"]))
         elements.append(Spacer(1, 12))
-
         if image:
             img_path = f"temp_page_{i}.png"
             image.save(img_path)
@@ -65,32 +95,39 @@ def create_pdf(story_pages, output_file="storybook.pdf"):
     doc.build(elements)
     return output_file
 
-# ---------- STREAMLIT APP ----------
-st.title("🖍️ Children's Storybook Generator")
-st.write("Enter a story prompt and generate a multi-page storybook with images.")
+# ---------- MAIN APP ----------
+if not st.session_state.logged_in:
+    login()
+else:
+    st.title(f"🖍️ Welcome to AI Storybook Generator")
+    st.write("Enter a story prompt, select the type of story, and generate a storybook with AI-generated text and images.")
 
-# User inputs
-user_prompt = st.text_area("Story Prompt:", "")
-pages = st.number_input("Number of pages:", min_value=1, max_value=10, value=5)
+    # User Inputs
+    user_prompt = st.text_area("Story Prompt:", "")
+    story_type = st.selectbox(
+        "Select Story Type:",
+        ["Fiction", "Adventure", "Mystery", "Fantasy", "Sci-Fi", "Comedy", "Educational"]
+    )
+    pages = st.number_input("Number of pages:", min_value=1, max_value=10, value=5)
 
-if st.button("Generate Storybook"):
-    if user_prompt.strip() == "":
-        st.error("Please enter a story prompt.")
-    else:
-        with st.spinner("Generating storybook... This may take a minute!"):
-            story_pages = generate_story(user_prompt, pages=pages)
-            pdf_file = create_pdf(story_pages)
-        st.success("Storybook generated!")
+    if st.button("Generate Storybook"):
+        if user_prompt.strip() == "":
+            st.error("Please enter a story prompt.")
+        else:
+            with st.spinner("Generating storybook... This may take a few minutes!"):
+                story_pages = generate_story(user_prompt, story_type, pages=pages)
+                pdf_file = create_pdf(story_pages)
+            st.success(f"{story_type} Storybook generated!")
 
-        # Provide PDF download
-        with open(pdf_file, "rb") as f:
-            st.download_button(
-                label="📥 Download Storybook PDF",
-                data=f,
-                file_name="storybook.pdf",
-                mime="application/pdf"
-            )
+            # PDF Download
+            with open(pdf_file, "rb") as f:
+                st.download_button(
+                    label="📥 Download Storybook PDF",
+                    data=f,
+                    file_name="storybook.pdf",
+                    mime="application/pdf"
+                )
 
-        # Show preview of first page image
-        if story_pages[0][1]:
-            st.image(story_pages[0][1], caption="Preview: Page 1")
+            # Preview first page
+            if story_pages[0][1]:
+                st.image(story_pages[0][1], caption="Preview: Page 1")
