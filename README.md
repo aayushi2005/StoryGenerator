@@ -35,5 +35,3 @@ Welcome to **AI Storybook Generator**, a **Streamlit web app** that creates mult
    - Allows preview and download via Streamlit.  
 
 ---
-git clone <your-repo-url>
-cd <repo-folder>
